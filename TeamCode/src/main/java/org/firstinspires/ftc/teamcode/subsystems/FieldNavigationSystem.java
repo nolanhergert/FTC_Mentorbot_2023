@@ -37,6 +37,7 @@ import static org.firstinspires.ftc.robotcore.external.navigation.AxesReference.
 import com.qualcomm.robotcore.eventloop.opmode.LinearOpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.HardwareMap;
+import com.qualcomm.robotcore.hardware.Servo;
 
 import org.firstinspires.ftc.robotcore.external.ClassFactory;
 import org.firstinspires.ftc.robotcore.external.hardware.camera.WebcamName;
@@ -86,6 +87,7 @@ public class FieldNavigationSystem {
     private VuforiaTrackables targets;
     private List<VuforiaTrackable> allTrackables;
     private WebcamName webcamName;
+    private Servo angleServo = null;
 
     private boolean targetVisible = false;
 
