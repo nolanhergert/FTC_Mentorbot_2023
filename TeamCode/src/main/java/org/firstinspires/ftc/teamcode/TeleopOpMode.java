@@ -59,7 +59,7 @@ import org.firstinspires.ftc.robotcore.external.navigation.Orientation;
  * Remove or comment out the @Disabled line to add this opmode to the Driver Station OpMode list
  */
 
-@TeleOp(name="Basic: Iterative OpMode v3", group="Testing Opmode Group")
+@TeleOp(name="Basic: Iterative OpMode v4", group="Testing Opmode Group")
 public class TeleopOpMode extends OpMode {
     // Declare OpMode members.
     private ElapsedTime runtime = new ElapsedTime();
@@ -115,11 +115,12 @@ public class TeleopOpMode extends OpMode {
         lift_limit = hardwareMap.get(TouchSensor.class, "lift_limit");
         lift_servo = hardwareMap.get(Servo.class, "lift_dropper");
 
-//        lift.setDirection(DcMotorSimple.Direction.REVERSE);
+        lift.setDirection(DcMotorSimple.Direction.REVERSE);
         lift.setMode(DcMotor.RunMode.STOP_AND_RESET_ENCODER);
         lift.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
         this.elevator = new Elevator(lift, lift_servo, lift_limit);
+        this.elevator.idle();
 
         // To drive forward, most robots need the motor on one side to be reversed, because the axles point in opposite directions.
         // Pushing the left stick forward MUST make robot go forward. So adjust these two lines based on your first test drive.
@@ -138,9 +139,6 @@ public class TeleopOpMode extends OpMode {
         backLeft.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
         backRight.setMode(DcMotor.RunMode.RUN_USING_ENCODER);
 
-        drive = new Drive(frontLeft, frontRight, backLeft, backRight);
-        odom = new HolonomicOdometry();
-
         // Set up the parameters with which we will use our IMU. Note that integration
         // algorithm here just reports accelerations to the logcat log; it doesn't actually
         // provide positional information.
@@ -157,6 +155,9 @@ public class TeleopOpMode extends OpMode {
         // and named "imu".
         imu = hardwareMap.get(BNO055IMU.class, "imu");
         imu.initialize(parameters);
+
+        drive = new Drive(frontLeft, frontRight, backLeft, backRight, imu);
+        odom = new HolonomicOdometry();
 
         // Tell the driver that initialization is complete.
         telemetry.addData("Status", "Initialized");
@@ -190,14 +191,27 @@ public class TeleopOpMode extends OpMode {
         // Comment out the method that's not used.  The default below is POV.
         Orientation angles = imu.getAngularOrientation();
         telemetry.addLine()
-                .addData("1", "%.2f",angles.firstAngle)
-                .addData("2", "%.2f", angles.secondAngle)
-                .addData("3", "%.2f", angles.thirdAngle);
+                .addData("orientation",
+                        "%.2f ->.2f",
+                        -angles.firstAngle * Math.PI / 180,
+                        drive.ctrl_turn.setpoint
+                );
 
         double lift_power = gamepad1.left_trigger - gamepad1.right_trigger;
-        elevator.go_manual(lift_power);
+        if(Math.abs(lift_power) > 0.2 || !elevator.auto) {
+            elevator.go_manual(lift_power);
+            elevator.auto = false;
+        } else {
+            elevator.go();
+        }
         telemetry.addLine()
-                .addData("lift_encoder", "%f", elevator.lift_position());
+                .addData(
+                        "Lift Encoder",
+                        "%.2f -> %.2f @ %.2f",
+                        elevator.lift_position(),
+                        elevator.ctrl_lift.setpoint,
+                        lift.getPower()
+                );
 
         telemetry.addData(
                 "Lift Limit Switch",
@@ -205,11 +219,18 @@ public class TeleopOpMode extends OpMode {
         );
 
         if(gamepad1.a){
-            this.elevator.drop();
+            elevator.drop();
+        } else if(gamepad1.x){
+            elevator.idle();
+            elevator.auto = true;
+        } else if(gamepad1.y){
+            elevator.pickup();
+            elevator.auto = true;
+        } else if(gamepad1.b){
+            elevator.lift();
+            elevator.auto = true;
         }
-        else{
-            this.elevator.undrop();
-        }
+
         telemetry.addData(
                 "Lift Servo Posn",
                 "%.2f",
@@ -220,15 +241,34 @@ public class TeleopOpMode extends OpMode {
         // - This uses basic math to combine motions and is easier to drive straight.
         double drive = -gamepad1.left_stick_y;
         double lateral = gamepad1.left_stick_x;
-        double turn  =  gamepad1.right_stick_x;;
+        double turn  =  gamepad1.right_stick_x;
+
+        double heading = Math.atan2(gamepad1.right_stick_x, -gamepad1.right_stick_y);
+        double magnitude = gamepad1.right_stick_x * gamepad1.right_stick_x
+                + gamepad1.right_stick_y * gamepad1.right_stick_y;
+
+        if(magnitude > 0.5){
+            this.drive.setHeadingTarget(heading);
+        }
 
         int max_speed = 36; // in/sec
+        int max_turn = 24;
+        if(gamepad1.left_bumper){
+            max_speed = 12;
+            max_turn = 8;
+        }
 
-        this.drive.go(drive*max_speed, lateral * max_speed, turn * max_speed);
+        this.drive.go(drive*max_speed, lateral * max_speed, turn * max_turn);
         this.odom.update(
             this.drive.odom_tangential,
             this.drive.odom_normal,
             -angles.firstAngle * Math.PI / 180
+        );
+
+        telemetry.addData(
+                "Drive",
+                "t: %.2f, n: %.2f, w:%.2f",
+                drive, lateral, turn
         );
 
         telemetry.addData(
@@ -237,16 +277,6 @@ public class TeleopOpMode extends OpMode {
             this.odom.x(),
             this.odom.y()
         );
-
-        // get motor stuff
-//        telemetry.addData(
-//            "Encoders",
-//            "fl:(%.2f);fr:(%.2f),bl:(%.2f),br:(%.2f)",
-//                this.to_inches(frontLeft.getCurrentPosition()),
-//                this.to_inches(frontRight.getCurrentPosition()),
-//                this.to_inches(backLeft.getCurrentPosition()),
-//                this.to_inches(backRight.getCurrentPosition())
-//        );
 
         long ms = System.currentTimeMillis();
         telemetry.addData("Loop period", "(%d) ms", ms - this.millis);

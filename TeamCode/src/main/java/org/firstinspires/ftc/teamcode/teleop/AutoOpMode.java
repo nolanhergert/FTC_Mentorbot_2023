@@ -24,6 +24,8 @@ public class AutoOpMode extends LinearOpMode {
 
     @Override
     public void runOpMode() throws InterruptedException {
+        m_navigation = new FieldNavigationSystem(hardwareMap, "Webcam 1");
+        m_drive = new TankDrive(hardwareMap);
 
         // Try to travel one foot forward (robot-oriented drive)
         //m_drive.travelDistanceInch(x,y,rot);
@@ -53,12 +55,4 @@ public class AutoOpMode extends LinearOpMode {
 
         // TODO: Correct for drift using vuforia tag
     }
-
-    @Override
-    public void init() {
-        m_navigation = new FieldNavigationSystem(hardwareMap, "Webcam 1");
-        m_drive = new TankDrive(hardwareMap);
-    }
-
-
 }

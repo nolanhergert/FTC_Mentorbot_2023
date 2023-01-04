@@ -7,13 +7,17 @@ import java.util.Arrays;
 
 public class Drive {
     PIDF ctrl_fl, ctrl_fr, ctrl_bl, ctrl_br;
+    PIDF ctrl_turn;
+
+    LowPassFilter v_fl, v_fr, v_bl, v_br;
 
     private DcMotor frontLeft;
     private DcMotor frontRight;
     private DcMotor backLeft;
     private DcMotor backRight;
 
-    // TODO: heading lock
+    private boolean heading_lock = false;
+    private double heading_target = 0;
     private BNO055IMU imu;
 
     public double odom_normal;
@@ -30,43 +34,78 @@ public class Drive {
         return encoder / ticks_per_rev * motor_diameter * Math.PI;
     }
 
-    public Drive(DcMotor fl, DcMotor fr, DcMotor bl, DcMotor br){
+    public Drive(DcMotor fl, DcMotor fr, DcMotor bl, DcMotor br,
+                 BNO055IMU imu){
         this.frontLeft = fl;
         this.frontRight = fr;
         this.backLeft = bl;
         this.backRight = br;
 
-        // guesses (overestimated)
-//        speed_control_ang.kf = 1/(4*360); // degrees
-//        speed_control_tan.kf = 1/(8*12); // in
-//        speed_control_norm.kf = 1/(5*12); // in
+        this.imu = imu;
 
         ctrl_bl = new PIDF();
         ctrl_fl = new PIDF();
         ctrl_br = new PIDF();
         ctrl_fr = new PIDF();
 
-        double kf = 1.0 / (5*12);
-        double kp = 0.00; // random guess again
+        double kf = 1.0 / (6*12);
+        double kp = 0.01; // random guess again
+        double ki = 0.0; // 0.001;
         ctrl_bl.kf = kf;
         ctrl_bl.kp = kp;
+        ctrl_bl.ki = ki;
         ctrl_fl.kf = kf;
         ctrl_fl.kp = kp;
+        ctrl_fl.ki = ki;
         ctrl_fr.kf = kf;
         ctrl_fr.kp = kp;
+        ctrl_fr.ki = ki;
         ctrl_br.kf = kf;
         ctrl_br.kp = kp;
+        ctrl_br.ki = ki;
+
+        ctrl_bl.setpoint = 0;
+        ctrl_br.setpoint = 0;
+        ctrl_fl.setpoint = 0;
+        ctrl_fr.setpoint = 0;
+
+        ctrl_turn = new PIDF();
+        ctrl_turn.kf = 0;
+        ctrl_turn.kp = 48.0/Math.PI; // wild guess
+//        ctrl_turn.kd = 10;
+        ctrl_turn.setpoint = 0;
+        ctrl_turn.ki = 1; // also guess
+
+        double lpf_alpha = 0.7;
+        v_fl = new LowPassFilter(lpf_alpha);
+        v_fr = new LowPassFilter(lpf_alpha);
+        v_bl = new LowPassFilter(lpf_alpha);
+        v_br = new LowPassFilter(lpf_alpha);
 
         prev_t = System.currentTimeMillis() / 1000.0;
     }
 
-    public void go(double vt, double vn, double vh){
+    public void setHeadingTarget(double t){
+        ctrl_turn.setpoint = t;
+        this.heading_target = t;
+    }
+
+    public void go(double vt_f, double vn_f, double vh){
         double time = System.currentTimeMillis() / 1000.0;
 
-        double v_fl = vt + vn + vh;
-        double v_fr = vt - vn - vh;
-        double v_bl = vt - vn + vh;
-        double v_br = vt + vn - vh;
+        double vt_r = vt_f;
+        double vn_r = vn_f;
+        double heading = -this.imu.getAngularOrientation().firstAngle * Math.PI / 180;
+        if(heading_lock) {
+            vh = ctrl_turn.next(heading, time);
+        }
+        vt_r = vt_f * Math.cos(-heading) - vn_f * Math.sin(-heading);
+        vn_r = vt_f * Math.sin(-heading) + vn_f * Math.cos(-heading);
+
+        double v_fl = vt_r + vn_r - vh;
+        double v_fr = vt_r - vn_r + vh;
+        double v_bl = vt_r - vn_r - vh;
+        double v_br = vt_r + vn_r + vh;
 
         ctrl_fl.setpoint = v_fl;
         ctrl_fr.setpoint = v_fr;
@@ -91,10 +130,15 @@ public class Drive {
         prev_bl = bl;
         prev_br = br;
 
-        double vh_fl = ctrl_fl.next(dfl/dt, time);
-        double vh_fr = ctrl_fr.next(dfr/dt, time);
-        double vh_bl = ctrl_bl.next(dbl/dt, time);
-        double vh_br = ctrl_br.next(dbr/dt, time);
+        double ve_fl = this.v_fl.next(dfl/dt);
+        double ve_fr = this.v_fr.next(dfr/dt);
+        double ve_bl = this.v_bl.next(dbl/dt);
+        double ve_br = this.v_br.next(dbr/dt);
+
+        double vh_fl = ctrl_fl.next(ve_fl, time);
+        double vh_fr = ctrl_fr.next(ve_fr, time);
+        double vh_bl = ctrl_bl.next(ve_bl, time);
+        double vh_br = ctrl_br.next(ve_br, time);
 
         odom_tangential = (dfl + dfr + dbl + dbr) / 4;
         odom_normal = (dfl + dbr - dbl - dbr) / 2; // don't ask

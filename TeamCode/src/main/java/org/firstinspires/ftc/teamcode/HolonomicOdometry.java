@@ -15,13 +15,13 @@ public class HolonomicOdometry {
             double sh = Math.sin(heading);
             posn_x += ch * tangential - sh * normal;
             posn_y += sh * tangential + ch * normal;
-        }
-        else{
+        } else {
             double dsin = Math.sin(heading) - Math.sin(prev_heading);
             double dcos = Math.cos(heading) - Math.cos(prev_heading);
             posn_x += (tangential * dsin + normal * dcos) / dh;
             posn_y += (normal * dsin - tangential * dcos) / dh;
         }
+        prev_heading = heading;
     }
 
     public double x(){
