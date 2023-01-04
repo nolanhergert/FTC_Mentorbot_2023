@@ -16,7 +16,7 @@ import org.firstinspires.ftc.teamcode.subsystems.FieldNavigationSystem;
 import org.firstinspires.ftc.teamcode.subsystems.TankDrive;
 
 
-@Autonomous(name = "AutoOpMode")
+@Autonomous(name = "VisionOpMode", group = "dev")
 public class AutoOpMode extends LinearOpMode {
 
     FieldNavigationSystem m_navigation;

@@ -50,6 +50,7 @@ public class Drive {
 
         double kf = 1.0 / (6*12);
         double kp = 0.01; // random guess again
+//        double kp = 0.0; // temp
         double ki = 0.0; // 0.001;
         ctrl_bl.kf = kf;
         ctrl_bl.kp = kp;
@@ -93,14 +94,15 @@ public class Drive {
     public void go(double vt_f, double vn_f, double vh){
         double time = System.currentTimeMillis() / 1000.0;
 
-        double vt_r = vt_f;
-        double vn_r = vn_f;
         double heading = -this.imu.getAngularOrientation().firstAngle * Math.PI / 180;
         if(heading_lock) {
             vh = ctrl_turn.next(heading, time);
         }
-        vt_r = vt_f * Math.cos(-heading) - vn_f * Math.sin(-heading);
-        vn_r = vt_f * Math.sin(-heading) + vn_f * Math.cos(-heading);
+
+        // tangential/normal speed in the robot frame
+        // after field-centric frame rotation
+        double vt_r = vt_f * Math.cos(-heading) - vn_f * Math.sin(-heading);
+        double vn_r = vt_f * Math.sin(-heading) + vn_f * Math.cos(-heading);
 
         double v_fl = vt_r + vn_r - vh;
         double v_fr = vt_r - vn_r + vh;
